@@ -1,0 +1,13 @@
+{
+  "name": "wisp-mikrotik-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/worker.js",
+  "scripts": {
+    "start": "node src/worker.js"
+  },
+  "dependencies": {
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  }
+}

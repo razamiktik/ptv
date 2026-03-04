@@ -1,0 +1,105 @@
+networks:
+  wisp-public:
+    driver: bridge
+  wisp-internal:
+    driver: bridge
+    internal: true
+  wisp-mikrotik:
+    driver: bridge
+
+volumes:
+  db-data:
+    driver: local
+  api-logs:
+
+services:
+
+  db:
+    image: mariadb:10.11
+    container_name: wisp-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE:      ${DB_NAME}
+      MARIADB_USER:          ${DB_USER}
+      MARIADB_PASSWORD:      ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d
+    networks:
+      - wisp-internal
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  api-core:
+    build:
+      context: ./api-core
+      dockerfile: Dockerfile
+    container_name: wisp-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      API_PORT: "3000"
+    volumes:
+      - api-logs:/app/logs
+      - ./api-core/plugins:/app/plugins
+    networks:
+      - wisp-public
+      - wisp-internal
+      - wisp-mikrotik
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  mikrotik-worker:
+    build:
+      context: ./mikrotik-worker
+      dockerfile: Dockerfile
+    container_name: wisp-mikrotik-worker
+    restart: unless-stopped
+    depends_on:
+      api-core:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      API_URL: http://wisp-api:3000
+    networks:
+      - wisp-mikrotik
+      - wisp-internal
+
+  web-ui:
+    build:
+      context: ./web-ui
+      dockerfile: Dockerfile
+    container_name: wisp-frontend
+    restart: unless-stopped
+    networks:
+      - wisp-public
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: wisp-nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web-ui
+      - api-core
+    networks:
+      - wisp-public
