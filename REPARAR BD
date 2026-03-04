@@ -1,0 +1,23 @@
+cd ~/programas/ptv
+
+# 1. Escribir valores en el .env
+cat >> .env << 'EOF'
+
+# DB Fix
+DB_ROOT_PASSWORD=WispRoot2024!
+DB_NAME=wispdb
+DB_USER=wispuser
+DB_PASSWORD=WispPass2024!
+EOF
+
+# 2. Verificar que quedaron
+grep "DB_" .env
+
+# 3. Limpiar volumen anterior (estaba vacío/corrupto)
+docker compose down -v
+
+# 4. Reiniciar todo
+docker compose up -d
+
+# 5. Esperar 25 segundos y ver estado
+sleep 25 && docker compose ps
